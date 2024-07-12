@@ -5,9 +5,9 @@ import socket
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QPlainTextEdit, QScrollArea, QPushButton, \
-    QHBoxLayout, QFileDialog
+    QHBoxLayout, QFileDialog, QDialog, QLineEdit
 from PyQt5 import QtGui
-
+from dialog import Dial
 from workerthread import WorkerThread
 import keyboard
 
@@ -86,7 +86,7 @@ class MojWidget(QWidget):
     def __del__(self):
         self.client_socket.close()
 
-    zapytania = ["Podaj adres IP: ", "Podaj port: ", "Podaj nazwe użytkownika: "]
+    zapytania = ["Podaj adres IP: ", "Podaj port: "]
     i = 1
     odpowiedzi = []
 
@@ -142,12 +142,12 @@ class MojWidget(QWidget):
 
     def wyslij(self):
         self.wiadomosci.setText(self.pending, reversed=True)
-        if self.i <= 3:
+        if self.i <= 2:
             self.odpowiedzi.append(self.pending.strip())
-            if self.i < 3:
+            if self.i < 2:
                 self.wiadomosci.setText(self.zapytania[self.i])
                 self.i += 1
-            elif self.i == 3:
+            elif self.i == 2:
                 self.stworz_komunikacje()
                 self.i += 1
         else:
@@ -177,6 +177,7 @@ class MojWidget(QWidget):
 
         header = struct.pack(f'!5s{len(self.odpowiedzi[2].encode("utf-8"))}s', "IMAGE".encode('utf-8'), self.odpowiedzi[2].encode("utf-8"))
 
+
         self.wiadomosci.show_image(image, reversed=True)
 
         self.client_socket.send(len(header).to_bytes(4, byteorder='big'))
@@ -190,9 +191,10 @@ class MojWidget(QWidget):
             start = end
         # self.client_socket.send(header + image)
 
-    def send_username(self, server_socket, username):
+    def send_username(self, server_socket, username, password):
         try:
             server_socket.send(username.encode('utf-8'))
+            server_socket.send(password.encode('utf-8'))
         except Exception as e:
             print(f"Błąd wysyłania nazwy użytkownika do serwera: {e}")
 
@@ -201,11 +203,17 @@ class MojWidget(QWidget):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect((self.odpowiedzi[0], int(self.odpowiedzi[1])))
-            self.send_username(self.client_socket, self.odpowiedzi[2])
+
+            dial = Dial()
+            dial.exec_()
+
+            self.odpowiedzi.append(dial.log)
+
+            self.send_username(self.client_socket, dial.log, dial.has)
 
             print("storzono komunikacje")
 
-            self.worker_thread = WorkerThread(self.client_socket, self.odpowiedzi[2])
+            self.worker_thread = WorkerThread(self.client_socket, dial.log)
             self.worker_thread.update_signal.connect(self.wiadomosci.check_type)
             self.worker_thread.start()
             # receive_thread = threading.Thread(target=self.receive_data_from_server, args=(self.client_socket,))

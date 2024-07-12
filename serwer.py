@@ -2,6 +2,7 @@ import socket
 import struct
 import threading
 import time
+import mysql.connector
 
 class Client:
     def __init__(self, socket, username):
@@ -9,35 +10,6 @@ class Client:
         self.username = username
 
 active_clients = []
-
-# def receive_data_from_client(client):
-#     try:
-#         while True:
-#             length = client.socket.recv(4)
-#             mess_len = client.socket.recv(4)
-
-#             mess_len = int.from_bytes(mess_len, byteorder='big')
-#             length = int.from_bytes(length, byteorder='big')
-                
-#             received_data = b""
-#             while len(received_data) < mess_len:
-#                 tmp =client.socket.recv(1024)
-#                 if not tmp:
-#                     break
-#                 received_data += tmp
-        
-#             if not received_data:
-#                 break
-
-#             print(f"{client.username}: {received_data}")
-
-#             # Przesyłaj wiadomość do wszystkich klientów
-#             broadcast(length, mess_len, received_data, client)
-
-#         client.socket.close()
-
-#     except Exception as e:
-#         print(f"Błąd odbierania danych od klienta {client.username}: {e}")
 
         
 def handle_client(client):
@@ -99,7 +71,16 @@ def start_server():
     server.bind(('192.168.100.30', 12345))
     server.listen(5)
 
+    db = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="kom"
+    )
+
     print("Serwer nasłuchuje na porcie 12345...")
+
+    cursor = db.cursor()
 
     while True:
         client_socket, addr = server.accept()
@@ -107,8 +88,18 @@ def start_server():
 
         # Odbierz nazwę użytkownika od klienta
         username = client_socket.recv(1024).decode('utf-8')
+        print(username)
+        password = client_socket.recv(1024).decode('utf-8')
+        print(password)
 
-        # Utwórz obiekt klienta i dodaj go do listy aktywnych klientów
+        querry = f"SELECT * FROM users WHERE login=\"{username}\" and pass=\"{password}\""
+        cursor.execute(querry)
+        results = cursor.fetchall()
+        print(results)
+
+        if len(results) < 1 or results[0][1] in [x.username for x in active_clients]:
+            continue
+
         client = Client(client_socket, username)
         active_clients.append(client)
 
@@ -128,11 +119,6 @@ def start_server():
         
         broadcast(len(header), len(message), message, client)
 
-        # Uruchom wątek odbierający dane od klienta
-        # receive_thread = threading.Thread(target=receive_data_from_client, args=(client,))
-        # receive_thread.start()
-
-        # Uruchom wątek obsługujący klienta
         handle_thread = threading.Thread(target=handle_client, args=(client,))
         handle_thread.start()
 
